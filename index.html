@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PRIME - Gerenciador de Pedidos do WhatsApp</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS (XLSX Export) CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            800: '#3730a3',
+                            900: '#312e81',
+                            950: '#1e1b4b'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="h-full bg-slate-950 text-slate-100 flex flex-col font-sans antialiased selection:bg-brand-500 selection:text-white overflow-hidden">
+
+    <!-- Compact Header / Navbar -->
+    <header class="bg-slate-900 border-b border-slate-800 shrink-0 h-14 flex items-center px-4 justify-between">
+        <div class="flex items-center space-x-2">
+            <div class="bg-brand-600 p-1.5 rounded-lg text-white">
+                <i data-lucide="truck" class="w-5 h-5"></i>
+            </div>
+            <h1 class="text-sm font-bold tracking-tight text-white flex items-center gap-2">
+                PRIME <span class="text-[10px] uppercase bg-brand-500/20 text-brand-300 font-semibold px-1.5 py-0.5 rounded border border-brand-500/30">WhatsApp Manager</span>
+            </h1>
+        </div>
+        <div class="flex items-center gap-2">
+            <button id="headerUploadBtn" class="inline-flex items-center gap-1.5 bg-brand-600 hover:bg-brand-500 text-white px-3 py-1.5 rounded-md font-medium text-xs transition cursor-pointer">
+                <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                Carregar Conversa (.txt)
+            </button>
+            <input type="file" id="fileInput" accept=".txt" class="hidden">
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 w-full mx-auto px-3 py-2 flex flex-col gap-2 overflow-hidden">
+
+        <!-- Welcome / Uploader Banner -->
+        <div id="welcomeState" class="bg-slate-900 border border-dashed border-slate-700 rounded-xl p-8 text-center flex flex-col items-center justify-center my-auto">
+            <div class="bg-brand-500/10 p-3 rounded-full text-brand-400 mb-3">
+                <i data-lucide="file-text" class="w-10 h-10"></i>
+            </div>
+            <h3 class="text-lg font-semibold text-white mb-1">Importe o arquivo de conversa do WhatsApp</h3>
+            <p class="text-slate-400 max-w-md text-xs mb-4">
+                Exporte o chat do seu grupo do WhatsApp e selecione o arquivo .txt para filtrar e organizar os pedidos.
+            </p>
+            <button id="welcomeUploadBtn" class="bg-brand-600 hover:bg-brand-500 text-white font-medium px-4 py-2 rounded-lg cursor-pointer text-xs transition flex items-center gap-2">
+                <i data-lucide="folder-open" class="w-4 h-4"></i>
+                Selecionar Arquivo .txt
+            </button>
+        </div>
+
+        <!-- Dashboard Content -->
+        <div id="dashboardContent" class="hidden flex-1 flex flex-col gap-2 overflow-hidden">
+
+            <!-- Compact Filters & Controls Card -->
+            <div class="bg-slate-900 border border-slate-800 rounded-lg p-3 shrink-0 flex flex-col gap-2 shadow-sm">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-slate-300 flex items-center gap-1">
+                            <i data-lucide="filter" class="w-3.5 h-3.5 text-brand-400"></i>
+                            Filtros de Pesquisa:
+                        </span>
+                        <span id="recordCountBadge" class="bg-brand-500/20 text-brand-300 px-2 py-0.5 rounded text-[11px] font-mono">0 encontrados</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <button onclick="runSearch()" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold rounded transition flex items-center gap-1 cursor-pointer shadow-sm">
+                            <i data-lucide="search" class="w-3.5 h-3.5"></i>
+                            Pesquisar / Filtrar
+                        </button>
+                        <button onclick="resetFilters()" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded transition border border-slate-700 flex items-center gap-1 cursor-pointer">
+                            <i data-lucide="rotate-ccw" class="w-3 h-3"></i>
+                            Limpar
+                        </button>
+                        <button onclick="exportToExcel()" class="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-medium rounded transition flex items-center gap-1 cursor-pointer">
+                            <i data-lucide="file-spreadsheet" class="w-3 h-3"></i>
+                            Exportar XLS
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Search Input Grid -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-8 gap-2 pt-1">
+                    <div class="lg:col-span-2">
+                        <label class="block text-[10px] uppercase font-semibold text-slate-400 mb-0.5">Pesquisa Universal</label>
+                        <input type="text" id="filterUniversal" placeholder="Digite qualquer palavra..." class="w-full px-2.5 py-1 bg-slate-950 border border-slate-700 rounded text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand-500">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase font-semibold text-slate-400 mb-0.5">Mês</label>
+                        <select id="filterMonth" class="w-full px-2 py-1 bg-slate-950 border border-slate-700 rounded text-xs text-slate-100 focus:outline-none focus:border-brand-500">
+                            <option value="">Todos</option>
+                            <option value="01">Janeiro</option>
+                            <option value="02">Fevereiro</option>
+                            <option value="03">Março</option>
+                            <option value="04">Abril</option>
+                            <option value="05">Maio</option>
+                            <option value="06">Junho</option>
+                            <option value="07">Julho</option>
+                            <option value="08">Agosto</option>
+                            <option value="09">Setembro</option>
+                            <option value="10">Outubro</option>
+                            <option value="11">Novembro</option>
+                            <option value="12">Dezembro</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase font-semibold text-slate-400 mb-0.5">Ano</label>
+                        <select id="filterYear" class="w-full px-2 py-1 bg-slate-950 border border-slate-700 rounded text-xs text-slate-100 focus:outline-none focus:border-brand-500">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase font-semibold text-slate-400 mb-0.5">Data Específica</label>
+                        <select id="filterDate" class="w-full px-2 py-1 bg-slate-950 border border-slate-700 rounded text-xs text-slate-100 focus:outline-none focus:border-brand-500">
+                            <option value="">Todas</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase font-semibold text-slate-400 mb-0.5">Motorista</label>
+                        <select id="filterDriver" class="w-full px-2 py-1 bg-slate-950 border border-slate-700 rounded text-xs text-slate-100 focus:outline-none focus:border-brand-500">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase font-semibold text-slate-400 mb-0.5">Placa</label>
+                        <select id="filterPlate" class="w-full px-2 py-1 bg-slate-950 border border-slate-700 rounded text-xs text-slate-100 focus:outline-none focus:border-brand-500">
+                            <option value="">Todas</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase font-semibold text-slate-400 mb-0.5">Cliente</label>
+                        <select id="filterClient" class="w-full px-2 py-1 bg-slate-950 border border-slate-700 rounded text-xs text-slate-100 focus:outline-none focus:border-brand-500">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Extra Custom Search Terms -->
+                <div class="flex items-center justify-between pt-1 border-t border-slate-800">
+                    <span class="text-[11px] text-slate-400">Termos extras para refinar:</span>
+                    <button onclick="addCustomFilterField()" class="text-[11px] text-brand-400 hover:text-brand-300 font-medium flex items-center gap-1 cursor-pointer">
+                        <i data-lucide="plus" class="w-3 h-3"></i> Adicionar Campo Extra
+                    </button>
+                </div>
+                <div id="customFiltersContainer" class="grid grid-cols-1 sm:grid-cols-3 gap-2"></div>
+            </div>
+
+            <!-- Grid Section -->
+            <div class="bg-slate-900 border border-slate-800 rounded-lg flex-1 flex flex-col overflow-hidden shadow-inner">
+                <div class="overflow-auto flex-1">
+                    <table class="w-full text-left border-collapse font-mono text-xs">
+                        <thead class="sticky top-0 bg-slate-950 text-slate-400 uppercase text-[10px] border-b border-slate-800 z-10">
+                            <tr>
+                                <th class="py-2 px-3 whitespace-nowrap">Data</th>
+                                <th class="py-2 px-3 whitespace-nowrap">Hora</th>
+                                <th class="py-2 px-3 whitespace-nowrap">Remetente</th>
+                                <th class="py-2 px-3 whitespace-nowrap">Cliente</th>
+                                <th class="py-2 px-3 whitespace-nowrap">Motorista</th>
+                                <th class="py-2 px-3 whitespace-nowrap">Placa</th>
+                                <th class="py-2 px-3 w-1/2">Pedido / Conversa (Texto Puro)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTableBody" class="divide-y divide-slate-800/50 text-slate-300">
+                            <!-- Rows populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Empty state for filter -->
+                <div id="emptyTableState" class="hidden p-8 text-center flex flex-col items-center justify-center my-auto">
+                    <p class="text-slate-300 text-xs font-semibold">Nenhum resultado encontrado para os filtros informados.</p>
+                    <p class="text-slate-500 text-[11px] mt-1">Ajuste os filtros ou clique em "Pesquisar" novamente.</p>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Custom Notification Modal -->
+    <div id="notificationModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-sm w-full p-5 shadow-2xl flex flex-col gap-3">
+            <div class="flex items-center gap-3">
+                <div id="modalIcon" class="p-2 rounded-lg bg-brand-500/10 text-brand-400">
+                    <i data-lucide="info" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h3 id="modalTitle" class="font-bold text-white text-sm">Aviso</h3>
+                    <p id="modalMessage" class="text-xs text-slate-400 mt-0.5">Mensagem informativa.</p>
+                </div>
+            </div>
+            <div class="flex justify-end pt-1">
+                <button onclick="closeModal()" class="bg-brand-600 hover:bg-brand-500 text-white px-4 py-1.5 rounded text-xs font-medium cursor-pointer">
+                    Entendido
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Logic Script -->
+    <script>
+        let parsedMessages = [];
+        let filteredMessages = [];
+        let customFiltersCount = 0;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            try {
+                if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                    lucide.createIcons();
+                }
+            } catch (e) {
+                console.error("Lucide init error:", e);
+            }
+
+            const fileInput = document.getElementById('fileInput');
+            const headerBtn = document.getElementById('headerUploadBtn');
+            const welcomeBtn = document.getElementById('welcomeUploadBtn');
+
+            if (headerBtn && fileInput) headerBtn.addEventListener('click', () => fileInput.click());
+            if (welcomeBtn && fileInput) welcomeBtn.addEventListener('click', () => fileInput.click());
+            if (fileInput) fileInput.addEventListener('change', handleFileUpload);
+        });
+
+        function showModal(title, message, type = 'info') {
+            document.getElementById('modalTitle').innerText = title;
+            document.getElementById('modalMessage').innerText = message;
+            const iconContainer = document.getElementById('modalIcon');
+            if (type === 'error') {
+                iconContainer.className = 'p-2 rounded-lg bg-rose-500/10 text-rose-400';
+                iconContainer.innerHTML = '<i data-lucide="alert-circle" class="w-5 h-5"></i>';
+            } else {
+                iconContainer.className = 'p-2 rounded-lg bg-brand-500/10 text-brand-400';
+                iconContainer.innerHTML = '<i data-lucide="info" class="w-5 h-5"></i>';
+            }
+            try { lucide.createIcons(); } catch(e){}
+            document.getElementById('notificationModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('notificationModal').classList.add('hidden');
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                parseWhatsAppChat(text);
+            };
+            reader.readAsText(file, 'UTF-8');
+        }
+
+        function parseWhatsAppChat(rawText) {
+            const lines = rawText.split('\n');
+            parsedMessages = [];
+
+            const regexBracket = /^\[?(\d{2}\/\d{2}\/\d{2,4}),?\s+(\d{2}:\d{2}(?::\d{2})?)\]?\s+([^:]+):\s+(.*)$/;
+            const regexHyphen = /^(\d{2}\/\d{2}\/\d{2,4})\s+(\d{2}:\d{2})\s+-\s+([^:]+):\s+(.*)$/;
+
+            let currentMessage = null;
+
+            for (let i = 0; i < lines.length; i++) {
+                let line = lines[i].trim();
+                if (!line) continue;
+
+                let match = line.match(regexBracket) || line.match(regexHyphen);
+
+                if (match) {
+                    if (currentMessage) parsedMessages.push(currentMessage);
+
+                    let dateStr = match[1];
+                    let timeStr = match[2];
+                    let sender = match[3].trim();
+                    let content = match[4].trim();
+
+                    const dateParts = parseDateParts(dateStr);
+
+                    currentMessage = {
+                        id: parsedMessages.length + 1,
+                        date: dateStr,
+                        month: dateParts.month,
+                        year: dateParts.year,
+                        time: timeStr,
+                        sender: sender,
+                        content: content,
+                        client: extractClient(content),
+                        driver: extractDriver(content, sender),
+                        plate: extractPlate(content)
+                    };
+                } else {
+                    if (currentMessage) {
+                        currentMessage.content += " " + line;
+                        currentMessage.client = extractClient(currentMessage.content);
+                        currentMessage.driver = extractDriver(currentMessage.content, currentMessage.sender);
+                        currentMessage.plate = extractPlate(currentMessage.content);
+                    } else {
+                        parsedMessages.push({
+                            id: parsedMessages.length + 1,
+                            date: "-",
+                            month: "",
+                            year: "",
+                            time: "--:--",
+                            sender: "Sistema",
+                            content: line,
+                            client: "-",
+                            driver: "-",
+                            plate: "-"
+                        });
+                    }
+                }
+            }
+
+            if (currentMessage) parsedMessages.push(currentMessage);
+
+            if (parsedMessages.length === 0) {
+                showModal("Atenção", "Não foi possível extrair mensagens no formato padrão do WhatsApp.", "error");
+                return;
+            }
+
+            document.getElementById('welcomeState').classList.add('hidden');
+            document.getElementById('dashboardContent').classList.remove('hidden');
+
+            populateFilterDropdowns();
+            runSearch();
+            showModal("Sucesso!", `Arquivo processado! ${parsedMessages.length} registros carregados.`);
+        }
+
+        function parseDateParts(dateStr) {
+            if (!dateStr || dateStr === '-') return { month: '', year: '' };
+            const parts = dateStr.split('/');
+            if (parts.length === 3) {
+                let year = parts[2].trim();
+                if (year.length === 2) year = '20' + year;
+                return {
+                    month: parts[1].padStart(2, '0'),
+                    year: year
+                };
+            }
+            return { month: '', year: '' };
+        }
+
+        function extractPlate(text) {
+            // Enhanced regex matching standard Brazilian plates (ABC-1234 or Mercosul ABC1D23)
+            const plateRegex = /\b[A-Z]{3}[-\s]?[0-9][A-Z0-9][0-9]{2}\b/i;
+            const match = text.match(plateRegex);
+            return match ? match[0].replace(/[^a-zA-Z0-9]/g, '').toUpperCase() : "-";
+        }
+
+        function extractDriver(content, sender) {
+            const motMatch = content.match(/(?:MOT|MOTORISTA)[:\s]+([A-Za-zÀ-ÖØ-öø-ÿ\s]+)(?=\n|,|\.|$)/i);
+            if (motMatch && motMatch[1].trim().length > 1) {
+                return motMatch[1].trim();
+            }
+            return sender;
+        }
+
+        function extractClient(text) {
+            const clientMatch = text.match(/(?:cliente|empresa|destino|local|carregamento)[:\s]+([A-Za-z0-9\s\.\-_]+)(?=\n|,|\.|$)/i);
+            if (clientMatch && clientMatch[1].trim().length > 2) {
+                return clientMatch[1].trim();
+            }
+            return "-";
+        }
+
+        function populateFilterDropdowns() {
+            // Extract distinct list of all plates dynamically found across entire text/content
+            const allPlates = new Set();
+            parsedMessages.forEach(m => {
+                if (m.plate && m.plate !== "-") allPlates.add(m.plate);
+                const extraPlateMatch = extractPlate(m.content);
+                if (extraPlateMatch !== "-") allPlates.add(extraPlateMatch);
+            });
+
+            const drivers = [...new Set(parsedMessages.map(m => m.driver))].filter(d => d && d !== "-").sort();
+            const plates = [...allPlates].sort();
+            const dates = [...new Set(parsedMessages.map(m => m.date))].filter(d => d && d !== "-").sort();
+            const clients = [...new Set(parsedMessages.map(m => m.client))].filter(c => c && c !== "-").sort();
+            const years = [...new Set(parsedMessages.map(m => m.year))].filter(y => y && y !== "").sort();
+
+            const populateSelect = (id, items, defaultLabel = "Todos") => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.innerHTML = `<option value="">${defaultLabel}</option>` + items.map(i => `<option value="${i}">${i}</option>`).join('');
+                }
+            };
+
+            populateSelect('filterDriver', drivers);
+            populateSelect('filterPlate', plates, "Todas");
+            populateSelect('filterDate', dates, "Todas");
+            populateSelect('filterClient', clients);
+            populateSelect('filterYear', years);
+        }
+
+        window.addCustomFilterField = function() {
+            customFiltersCount++;
+            const container = document.getElementById('customFiltersContainer');
+            if (!container) return;
+            const fieldId = `customFilter_${customFiltersCount}`;
+            
+            const div = document.createElement('div');
+            div.className = 'flex items-center gap-1';
+            div.innerHTML = `
+                <input type="text" id="${fieldId}" placeholder="Termo ${customFiltersCount}..." class="w-full px-2 py-1 bg-slate-950 border border-slate-700 rounded text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand-500">
+                <button type="button" class="remove-custom-btn p-1 text-slate-400 hover:text-rose-400 bg-slate-950 border border-slate-700 rounded transition cursor-pointer" title="Remover">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                </button>
+            `;
+            container.appendChild(div);
+
+            const removeBtn = div.querySelector('.remove-custom-btn');
+            if (removeBtn) {
+                removeBtn.addEventListener('click', () => {
+                    div.remove();
+                });
+            }
+
+            try { lucide.createIcons(); } catch(e){}
+        }
+
+        window.runSearch = function() {
+            const univEl = document.getElementById('filterUniversal');
+            const universalQuery = univEl ? univEl.value.toLowerCase().trim() : '';
+
+            const mEl = document.getElementById('filterMonth');
+            const selectedMonth = mEl ? mEl.value : '';
+
+            const yEl = document.getElementById('filterYear');
+            const selectedYear = yEl ? yEl.value : '';
+
+            const drvEl = document.getElementById('filterDriver');
+            const selectedDriver = drvEl ? drvEl.value.toLowerCase().trim() : '';
+
+            const pltEl = document.getElementById('filterPlate');
+            const selectedPlateRaw = pltEl ? pltEl.value.trim() : '';
+            const selectedPlateClean = selectedPlateRaw.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+            const dtEl = document.getElementById('filterDate');
+            const selectedDate = dtEl ? dtEl.value : '';
+
+            const clEl = document.getElementById('filterClient');
+            const selectedClient = clEl ? clEl.value.toLowerCase().trim() : '';
+
+            const customInputs = document.querySelectorAll('[id^="customFilter_"]');
+            const customQueries = Array.from(customInputs).map(input => input.value.toLowerCase().trim()).filter(val => val.length > 0);
+
+            const hasAnyFilter = universalQuery || selectedMonth || selectedYear || selectedDriver || selectedPlateRaw || selectedDate || selectedClient || customQueries.length > 0;
+
+            if (!hasAnyFilter) {
+                filteredMessages = [];
+                renderTable();
+                return;
+            }
+
+            filteredMessages = parsedMessages.filter(msg => {
+                const fullTextString = `${msg.date} ${msg.time} ${msg.sender} ${msg.client} ${msg.driver} ${msg.plate} ${msg.content}`.toLowerCase();
+                
+                if (universalQuery && !fullTextString.includes(universalQuery)) return false;
+                if (selectedMonth && msg.month !== selectedMonth) return false;
+                if (selectedYear && msg.year !== selectedYear) return false;
+                
+                if (selectedDriver) {
+                    const driverMatch = msg.driver.toLowerCase().includes(selectedDriver) || msg.sender.toLowerCase().includes(selectedDriver) || msg.content.toLowerCase().includes(selectedDriver);
+                    if (!driverMatch) return false;
+                }
+
+                if (selectedPlateClean) {
+                    const cleanPlateExtracted = (msg.plate || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+                    const cleanContent = (msg.content || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+                    
+                    const plateMatch = cleanPlateExtracted.includes(selectedPlateClean) || cleanContent.includes(selectedPlateClean);
+                    if (!plateMatch) return false;
+                }
+
+                if (selectedDate && msg.date !== selectedDate) return false;
+
+                if (selectedClient) {
+                    const clientMatch = msg.client.toLowerCase().includes(selectedClient) || msg.content.toLowerCase().includes(selectedClient);
+                    if (!clientMatch) return false;
+                }
+
+                for (let q of customQueries) {
+                    if (!fullTextString.includes(q)) return false;
+                }
+
+                return true;
+            });
+
+            renderTable();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('dataTableBody');
+            const emptyState = document.getElementById('emptyTableState');
+            const badge = document.getElementById('recordCountBadge');
+
+            if (badge) badge.innerText = `${filteredMessages.length} encontrados`;
+            if (!tbody) return;
+
+            if (filteredMessages.length === 0) {
+                tbody.innerHTML = '';
+                if (emptyState) emptyState.classList.remove('hidden');
+                return;
+            }
+
+            if (emptyState) emptyState.classList.add('hidden');
+
+            tbody.innerHTML = filteredMessages.map(msg => `
+                <tr class="hover:bg-slate-800/40 transition border-b border-slate-800/40">
+                    <td class="py-1.5 px-3 text-slate-300 whitespace-nowrap">${escapeHtml(msg.date)}</td>
+                    <td class="py-1.5 px-3 text-slate-400 whitespace-nowrap">${escapeHtml(msg.time)}</td>
+                    <td class="py-1.5 px-3 text-slate-200 whitespace-nowrap">${escapeHtml(msg.sender)}</td>
+                    <td class="py-1.5 px-3 text-slate-300 whitespace-nowrap">${escapeHtml(msg.client)}</td>
+                    <td class="py-1.5 px-3 text-slate-300 whitespace-nowrap">${escapeHtml(msg.driver)}</td>
+                    <td class="py-1.5 px-3 text-amber-300 whitespace-nowrap font-bold">${escapeHtml(msg.plate)}</td>
+                    <td class="py-1.5 px-3 text-slate-200 break-words">${escapeHtml(msg.content)}</td>
+                </tr>
+            `).join('');
+        }
+
+        window.resetFilters = function() {
+            const univEl = document.getElementById('filterUniversal');
+            if (univEl) univEl.value = '';
+
+            const mEl = document.getElementById('filterMonth');
+            if (mEl) mEl.value = '';
+
+            const yEl = document.getElementById('filterYear');
+            if (yEl) yEl.value = '';
+
+            const drvEl = document.getElementById('filterDriver');
+            if (drvEl) drvEl.value = '';
+
+            const pltEl = document.getElementById('filterPlate');
+            if (pltEl) pltEl.value = '';
+
+            const dtEl = document.getElementById('filterDate');
+            if (dtEl) dtEl.value = '';
+
+            const clEl = document.getElementById('filterClient');
+            if (clEl) clEl.value = '';
+
+            const container = document.getElementById('customFiltersContainer');
+            if (container) container.innerHTML = '';
+            
+            customFiltersCount = 0;
+            filteredMessages = [];
+            renderTable();
+        }
+
+        window.exportToExcel = function() {
+            if (filteredMessages.length === 0) {
+                showModal("Atenção", "Não há registros filtrados para exportar.", "error");
+                return;
+            }
+
+            const dataToExport = filteredMessages.map(m => ({
+                "Data": m.date,
+                "Hora": m.time,
+                "Remetente": m.sender,
+                "Cliente": m.client,
+                "Motorista": m.driver,
+                "Placa": m.plate,
+                "Conteúdo do Pedido": m.content
+            }));
+
+            if (typeof XLSX === 'undefined') {
+                showModal("Erro", "A biblioteca Excel não carregou.", "error");
+                return;
+            }
+
+            const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Pedidos WhatsApp");
+
+            const dateStr = new Date().toISOString().slice(0, 10);
+            XLSX.writeFile(workbook, `Relatorio_PRIME_${dateStr}.xlsx`);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;")
+                      .replace(/</g, "&lt;")
+                      .replace(/>/g, "&gt;")
+                      .replace(/"/g, "&quot;")
+                      .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
